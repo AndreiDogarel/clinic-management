@@ -4,9 +4,7 @@ import com.example.clinic_management.dto.AppointmentCreateRequest;
 import com.example.clinic_management.dto.AppointmentResponse;
 import com.example.clinic_management.entity.*;
 import com.example.clinic_management.exception.ApiException;
-import com.example.clinic_management.repository.AppointmentRepository;
-import com.example.clinic_management.repository.DoctorRepository;
-import com.example.clinic_management.repository.PatientRepository;
+import com.example.clinic_management.repository.*;
 import com.example.clinic_management.service.AppointmentService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,15 +19,21 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final AppointmentRepository appointmentRepository;
     private final PatientRepository patientRepository;
     private final DoctorRepository doctorRepository;
+    private final DoctorScheduleBreakRepository doctorScheduleBreakRepository;
+    private final DoctorScheduleRepository doctorScheduleRepository;
 
     public AppointmentServiceImpl(
             AppointmentRepository appointmentRepository,
             PatientRepository patientRepository,
-            DoctorRepository doctorRepository
+            DoctorRepository doctorRepository,
+            DoctorScheduleBreakRepository doctorScheduleBreakRepository,
+            DoctorScheduleRepository doctorBreakRepository
     ) {
         this.appointmentRepository = appointmentRepository;
         this.patientRepository = patientRepository;
         this.doctorRepository = doctorRepository;
+        this.doctorScheduleBreakRepository = doctorScheduleBreakRepository;
+        this.doctorScheduleRepository = doctorBreakRepository;
     }
 
     @Override
@@ -63,6 +67,35 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
         if (!doctor.getClinic().isActive()) {
             throw new ApiException("CLINIC_INACTIVE", "Clinic is inactive");
+        }
+
+        java.time.LocalDate date = request.getStartTime().atZoneSameInstant(java.time.ZoneId.of("Europe/Bucharest")).toLocalDate();
+        short dow = (short) date.getDayOfWeek().getValue();
+
+        com.example.clinic_management.entity.DoctorSchedule s = doctorScheduleRepository
+                .findByDoctorIdAndDayOfWeek(doctor.getId(), dow)
+                .orElseThrow(() -> new ApiException("SCHEDULE_NOT_FOUND", "Doctor has no schedule for that day"));
+
+        if (!s.isActive()) {
+            throw new ApiException("SCHEDULE_INACTIVE", "Doctor schedule inactive");
+        }
+
+        java.time.OffsetDateTime workStart = java.time.ZonedDateTime.of(date, s.getStartTime(), java.time.ZoneId.of("Europe/Bucharest")).toOffsetDateTime();
+        java.time.OffsetDateTime workEnd = java.time.ZonedDateTime.of(date, s.getEndTime(), java.time.ZoneId.of("Europe/Bucharest")).toOffsetDateTime();
+
+        if (request.getStartTime().isBefore(workStart) || request.getEndTime().isAfter(workEnd)) {
+            throw new ApiException("APPOINTMENT_OUTSIDE_SCHEDULE", "Appointment is outside doctor schedule");
+        }
+
+        java.util.List<com.example.clinic_management.entity.DoctorScheduleBreak> breaks =
+                doctorScheduleBreakRepository.findByScheduleIdOrderByStartTimeAsc(s.getId());
+
+        for (com.example.clinic_management.entity.DoctorScheduleBreak b : breaks) {
+            java.time.OffsetDateTime bs = java.time.ZonedDateTime.of(date, b.getStartTime(), java.time.ZoneId.of("Europe/Bucharest")).toOffsetDateTime();
+            java.time.OffsetDateTime be = java.time.ZonedDateTime.of(date, b.getEndTime(), java.time.ZoneId.of("Europe/Bucharest")).toOffsetDateTime();
+            if (request.getStartTime().isBefore(be) && request.getEndTime().isAfter(bs)) {
+                throw new ApiException("APPOINTMENT_OVERLAPS_BREAK", "Appointment overlaps a break");
+            }
         }
 
 
