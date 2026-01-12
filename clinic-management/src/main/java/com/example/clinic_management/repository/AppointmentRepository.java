@@ -40,4 +40,6 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
             @Param("from") OffsetDateTime from,
             @Param("to") OffsetDateTime to
     );
+
+    List<com.example.clinic_management.entity.Appointment> findByDoctorIdAndStartTimeBetween(Long doctorId, java.time.OffsetDateTime from, java.time.OffsetDateTime to);
 }
