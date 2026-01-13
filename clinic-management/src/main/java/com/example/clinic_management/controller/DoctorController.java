@@ -45,4 +45,10 @@ public class DoctorController {
     public void deactivate(@PathVariable Long id) {
         doctorService.deactivate(id);
     }
+
+    @PutMapping("/{id}/link-user")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void linkUser(@PathVariable Long id, @Valid @RequestBody com.example.clinic_management.dto.DoctorLinkUserRequest request) {
+        doctorService.linkUser(id, request.getUserId());
+    }
 }

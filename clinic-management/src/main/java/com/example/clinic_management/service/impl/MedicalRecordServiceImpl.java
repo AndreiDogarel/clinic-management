@@ -8,6 +8,7 @@ import com.example.clinic_management.repository.AppointmentRepository;
 import com.example.clinic_management.repository.DoctorRepository;
 import com.example.clinic_management.repository.MedicalRecordRepository;
 import com.example.clinic_management.repository.PatientRepository;
+import com.example.clinic_management.service.AuditService;
 import com.example.clinic_management.service.MedicalRecordService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,17 +23,20 @@ public class MedicalRecordServiceImpl implements MedicalRecordService {
     private final PatientRepository patientRepository;
     private final DoctorRepository doctorRepository;
     private final AppointmentRepository appointmentRepository;
+    private final AuditService auditService;
 
     public MedicalRecordServiceImpl(
             MedicalRecordRepository medicalRecordRepository,
             PatientRepository patientRepository,
             DoctorRepository doctorRepository,
-            AppointmentRepository appointmentRepository
+            AppointmentRepository appointmentRepository,
+            AuditService auditService
     ) {
         this.medicalRecordRepository = medicalRecordRepository;
         this.patientRepository = patientRepository;
         this.doctorRepository = doctorRepository;
         this.appointmentRepository = appointmentRepository;
+        this.auditService = auditService;
     }
 
     @Override
@@ -44,8 +48,19 @@ public class MedicalRecordServiceImpl implements MedicalRecordService {
             throw new ApiException("PATIENT_INACTIVE", "Patient is inactive");
         }
 
-        Doctor doctor = doctorRepository.findById(request.getDoctorId())
-                .orElseThrow(() -> new ApiException("DOCTOR_NOT_FOUND", "Doctor not found"));
+        Doctor doctor;
+        if (com.example.clinic_management.config.SecurityUtil.hasRole("DOCTOR")) {
+            String email = com.example.clinic_management.config.SecurityUtil.currentEmail();
+            if (email == null) {
+                throw new ApiException("AUTH_REQUIRED", "Authentication required");
+            }
+            doctor = doctorRepository.findByUserAccountEmailIgnoreCase(email)
+                    .orElseThrow(() -> new ApiException("DOCTOR_ACCOUNT_NOT_LINKED", "Doctor account not linked"));
+        } else {
+            doctor = doctorRepository.findById(request.getDoctorId())
+                    .orElseThrow(() -> new ApiException("DOCTOR_NOT_FOUND", "Doctor not found"));
+        }
+
         if (!doctor.isActive()) {
             throw new ApiException("DOCTOR_INACTIVE", "Doctor is inactive");
         }
@@ -79,7 +94,12 @@ public class MedicalRecordServiceImpl implements MedicalRecordService {
         mr.setDiagnosis(request.getDiagnosis());
         mr.setNotes(request.getNotes());
 
-        return toResponse(medicalRecordRepository.save(mr));
+        MedicalRecordResponse resp = toResponse(medicalRecordRepository.save(mr));
+
+        auditService.log("MEDICAL_RECORD_CREATE", "MedicalRecord", mr.getId(),
+                java.util.Map.of("appointmentId", appointment.getId(), "patientId", patient.getId(), "doctorId", doctor.getId()));
+
+        return resp;
     }
 
     @Override

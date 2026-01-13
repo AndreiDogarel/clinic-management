@@ -5,9 +5,12 @@ import com.example.clinic_management.dto.DoctorResponse;
 import com.example.clinic_management.dto.DoctorUpdateRequest;
 import com.example.clinic_management.entity.Clinic;
 import com.example.clinic_management.entity.Doctor;
+import com.example.clinic_management.entity.UserAccount;
 import com.example.clinic_management.exception.ApiException;
 import com.example.clinic_management.repository.ClinicRepository;
 import com.example.clinic_management.repository.DoctorRepository;
+import com.example.clinic_management.repository.UserAccountRepository;
+import com.example.clinic_management.service.AuditService;
 import com.example.clinic_management.service.DoctorService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,10 +22,17 @@ public class DoctorServiceImpl implements DoctorService {
 
     private final DoctorRepository doctorRepository;
     private final ClinicRepository clinicRepository;
+    private final UserAccountRepository userAccountRepository;
+    private final AuditService auditService;
 
-    public DoctorServiceImpl(DoctorRepository doctorRepository, ClinicRepository clinicRepository) {
+    public DoctorServiceImpl(DoctorRepository doctorRepository,
+                             ClinicRepository clinicRepository,
+                             UserAccountRepository userAccountRepository,
+                             AuditService auditService) {
         this.doctorRepository = doctorRepository;
         this.clinicRepository = clinicRepository;
+        this.userAccountRepository = userAccountRepository;
+        this.auditService = auditService;
     }
 
     @Override
@@ -92,6 +102,24 @@ public class DoctorServiceImpl implements DoctorService {
         d.setActive(false);
         doctorRepository.save(d);
     }
+
+    @Override
+    public void linkUser(Long doctorId, Long userId) {
+        Doctor d = doctorRepository.findById(doctorId)
+                .orElseThrow(() -> new ApiException("DOCTOR_NOT_FOUND", "Doctor not found"));
+
+        UserAccount u = userAccountRepository.findById(userId)
+                .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "User not found"));
+
+        if (!u.getRoles().contains(com.example.clinic_management.entity.Role.DOCTOR)) {
+            throw new ApiException("USER_NOT_DOCTOR", "User does not have DOCTOR role");
+        }
+
+        d.setUserAccount(u);
+        doctorRepository.save(d);
+        auditService.log("DOCTOR_LINK_USER", "Doctor", d.getId(), java.util.Map.of("userId", u.getId()));
+    }
+
 
     private DoctorResponse toResponse(Doctor d) {
         DoctorResponse r = new DoctorResponse();
