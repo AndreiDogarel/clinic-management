@@ -6,6 +6,7 @@ import com.example.clinic_management.dto.PatientUpdateRequest;
 import com.example.clinic_management.entity.Patient;
 import com.example.clinic_management.exception.ApiException;
 import com.example.clinic_management.repository.PatientRepository;
+import com.example.clinic_management.service.AuditService;
 import com.example.clinic_management.service.PatientService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,8 +18,12 @@ public class PatientServiceImpl implements PatientService {
 
     private final PatientRepository patientRepository;
 
-    public PatientServiceImpl(PatientRepository patientRepository) {
+    private final AuditService auditService;
+
+    public PatientServiceImpl(PatientRepository patientRepository,
+                              AuditService auditService) {
         this.patientRepository = patientRepository;
+        this.auditService = auditService;
     }
 
     @Override
@@ -32,6 +37,7 @@ public class PatientServiceImpl implements PatientService {
         Patient p = new Patient();
         applyCreate(p, request);
         p.setActive(true);
+        auditService.log("PATIENT_CREATE", "Patient", p.getId(), java.util.Map.of("email", p.getEmail()));
         return toResponse(patientRepository.save(p));
     }
 
@@ -74,7 +80,10 @@ public class PatientServiceImpl implements PatientService {
             p.setActive(request.getActive());
         }
 
-        return toResponse(patientRepository.save(p));
+        PatientResponse resp = toResponse(patientRepository.save(p));
+        auditService.log("PATIENT_UPDATE", "Patient", p.getId(), java.util.Map.of("email", p.getEmail()));
+
+        return resp;
     }
 
     @Override
@@ -82,6 +91,7 @@ public class PatientServiceImpl implements PatientService {
         Patient p = patientRepository.findById(id).orElseThrow(() -> new ApiException("PATIENT_NOT_FOUND", "Patient not found"));
         p.setActive(false);
         patientRepository.save(p);
+        auditService.log("PATIENT_DEACTIVATE", "Patient", p.getId(), java.util.Map.of());
     }
 
     private void applyCreate(Patient p, PatientCreateRequest request) {

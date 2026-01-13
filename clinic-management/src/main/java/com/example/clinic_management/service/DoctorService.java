@@ -11,4 +11,5 @@ public interface DoctorService {
     List<DoctorResponse> list(Long clinicId);
     DoctorResponse update(Long id, DoctorUpdateRequest request);
     void deactivate(Long id);
+    void linkUser(Long doctorId, Long userId);
 }

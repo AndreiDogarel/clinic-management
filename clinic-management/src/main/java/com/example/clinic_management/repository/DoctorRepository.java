@@ -9,4 +9,6 @@ public interface DoctorRepository extends JpaRepository<Doctor, Long> {
     boolean existsByEmailIgnoreCase(String email);
     Optional<Doctor> findByEmailIgnoreCase(String email);
     List<Doctor> findByClinicId(Long clinicId);
+    java.util.Optional<com.example.clinic_management.entity.Doctor> findByUserAccountEmailIgnoreCase(String email);
+
 }

@@ -6,6 +6,7 @@ import com.example.clinic_management.entity.*;
 import com.example.clinic_management.exception.ApiException;
 import com.example.clinic_management.repository.*;
 import com.example.clinic_management.service.AppointmentService;
+import com.example.clinic_management.service.AuditService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,19 +22,22 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final DoctorRepository doctorRepository;
     private final DoctorScheduleBreakRepository doctorScheduleBreakRepository;
     private final DoctorScheduleRepository doctorScheduleRepository;
+    private final AuditService auditService;
 
     public AppointmentServiceImpl(
             AppointmentRepository appointmentRepository,
             PatientRepository patientRepository,
             DoctorRepository doctorRepository,
             DoctorScheduleBreakRepository doctorScheduleBreakRepository,
-            DoctorScheduleRepository doctorBreakRepository
+            DoctorScheduleRepository doctorBreakRepository,
+            AuditService auditService
     ) {
         this.appointmentRepository = appointmentRepository;
         this.patientRepository = patientRepository;
         this.doctorRepository = doctorRepository;
         this.doctorScheduleBreakRepository = doctorScheduleBreakRepository;
         this.doctorScheduleRepository = doctorBreakRepository;
+        this.auditService = auditService;
     }
 
     @Override
@@ -107,7 +111,12 @@ public class AppointmentServiceImpl implements AppointmentService {
         a.setReason(request.getReason());
         a.setStatus(AppointmentStatus.SCHEDULED);
 
-        return toResponse(appointmentRepository.save(a));
+        AppointmentResponse resp = toResponse(appointmentRepository.save(a));
+
+        auditService.log("APPOINTMENT_CREATE", "Appointment", a.getId(),
+                java.util.Map.of("patientId", patient.getId(), "doctorId", doctor.getId(), "startTime", a.getStartTime().toString()));
+
+        return resp;
     }
 
     @Override
@@ -138,6 +147,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         a.setStatus(AppointmentStatus.CANCELLED);
         appointmentRepository.save(a);
+        auditService.log("APPOINTMENT_CANCEL", "Appointment", a.getId(), java.util.Map.of());
     }
 
     @Override
@@ -154,6 +164,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         a.setStatus(AppointmentStatus.COMPLETED);
         appointmentRepository.save(a);
+        auditService.log("APPOINTMENT_COMPLETE", "Appointment", a.getId(), java.util.Map.of());
     }
 
     private AppointmentResponse toResponse(Appointment a) {
